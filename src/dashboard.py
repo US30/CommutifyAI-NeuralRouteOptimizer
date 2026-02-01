@@ -10,9 +10,17 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from src.data_generator import generate_synthetic_data
 from src.routing_engine import calculate_distance_matrix
-from src.ml_engine import predict_time_matrix, train_traffic_model
+from src.ml_engine import predict_time_matrix
 from src.vrp_solver import solve_vrp
 from src.config import CITY_CENTER_LAT, CITY_CENTER_LON
+
+# --- HELPER: Time Formatting ---
+def format_duration(minutes):
+    """Converts minutes to 'X hrs Y mins (Total mins)' format"""
+    hours, mins = divmod(int(minutes), 60)
+    if hours > 0:
+        return f"{hours}h {mins}m ({int(minutes)} mins)"
+    return f"{mins}m"
 
 # Page Config
 st.set_page_config(page_title="Commutify AI", layout="wide")
@@ -21,41 +29,58 @@ st.title("🚛 Commutify AI: Intelligent Fleet Routing")
 st.markdown("### Machine Learning Powered Route Optimization")
 
 # --- INITIALIZE SESSION STATE ---
-# This acts as the "Memory" for the app
 if 'data' not in st.session_state:
     try:
-        # Load existing data or generate new
         st.session_state['data'] = pd.read_csv("data/raw/employees.csv")
     except:
         st.session_state['data'] = generate_synthetic_data()
 
 if 'routes' not in st.session_state:
-    st.session_state['routes'] = None  # No routes calculated yet
+    st.session_state['routes'] = None
 
-# --- SIDEBAR ---
-st.sidebar.header("⚙️ Simulation Parameters")
-# We use keys so the slider updates the state directly
-num_employees = st.sidebar.slider("Number of Employees", 10, 100, 30)
-shift_time = st.sidebar.selectbox("Shift Start Time", ["09:00", "14:00", "22:00", "06:00"])
-weather = st.sidebar.radio("Weather Condition", ["Clear", "Rainy"])
+# --- SIDEBAR: CONTROLS ---
+st.sidebar.header("⚙️ Fleet & Traffic Settings")
+
+# 1. Vehicle Count Control
+num_vehicles = st.sidebar.slider("🚌 Active Fleet Size", min_value=1, max_value=10, value=4)
+
+# 2. Employee Count
+num_employees = st.sidebar.slider("👥 Number of Employees", 10, 100, 30)
+
+# 3. Traffic Condition (Mapped to Time)
+traffic_level = st.sidebar.select_slider(
+    "🚦 Traffic Condition",
+    options=["Low (Midnight)", "Medium (Mid-day)", "High (Rush Hour)"],
+    value="High (Rush Hour)"
+)
+
+# Map text to hours for the ML model
+traffic_map = {
+    "Low (Midnight)": "02:00",
+    "Medium (Mid-day)": "11:00",
+    "High (Rush Hour)": "09:00"
+}
+shift_time = traffic_map[traffic_level]
+
+# 4. Weather
+weather = st.sidebar.radio("Weather", ["Clear", "Rainy"])
 weather_val = 1 if weather == "Rainy" else 0
 
-if st.sidebar.button("🔄 Generate New Data"):
+if st.sidebar.button("🔄 Reset / Generate New Data"):
     st.session_state['data'] = generate_synthetic_data()
-    st.session_state['routes'] = None # Reset routes since data changed
-    st.sidebar.success("New Data Generated! Click Optimize to route.")
-    st.rerun() # Force a refresh
+    st.session_state['routes'] = None
+    st.sidebar.success("New Data Generated!")
+    st.rerun()
 
 # --- MAIN LOGIC ---
 
-# Filter data based on slider
 df_display = st.session_state['data'].iloc[:num_employees]
 
 # Display Metrics
 col1, col2, col3 = st.columns(3)
 col1.metric("Total Employees", len(df_display))
-col2.metric("Active Vehicles", "4")
-col3.metric("Traffic Condition", "Heavy" if shift_time in ["09:00", "18:00"] else "Moderate")
+col2.metric("Fleet Capacity", f"{num_vehicles} Buses")
+col3.metric("Estimated Traffic", traffic_level.split(" (")[0])
 
 # --- BUTTON LOGIC ---
 if st.button("🚀 Optimize Routes"):
@@ -73,27 +98,25 @@ if st.button("🚀 Optimize Routes"):
         dist_matrix = calculate_distance_matrix(full_df)
         time_matrix = predict_time_matrix(dist_matrix, shift_time, weather_val)
         
-        # Save result to Session State
-        routes = solve_vrp(time_matrix, full_df)
+        # Pass num_vehicles dynamically
+        routes = solve_vrp(time_matrix, full_df, num_vehicles=num_vehicles)
+        
         if routes:
             st.session_state['routes'] = routes
             st.success("Optimization Complete!")
         else:
-            st.error("Optimization Failed.")
+            st.error("Optimization Failed. Try increasing the Fleet Size.")
 
-# --- VISUALIZATION LOGIC ---
-# This runs on every refresh, checking if 'routes' exists in memory
-
+# --- VISUALIZATION ---
 m = folium.Map(location=[CITY_CENTER_LAT, CITY_CENTER_LON], zoom_start=12)
 
-# Always plot Depot
+# Depot Marker
 folium.Marker(
     [CITY_CENTER_LAT, CITY_CENTER_LON], 
     tooltip="Office (Depot)",
     icon=folium.Icon(color="black", icon="building", prefix="fa")
 ).add_to(m)
 
-# CHECK: Do we have optimized routes in memory?
 if st.session_state['routes']:
     routes = st.session_state['routes']
     
@@ -106,12 +129,11 @@ if st.session_state['routes']:
     }])
     full_df = pd.concat([office_row, df_display], ignore_index=True)
 
-    colors = ['red', 'blue', 'green', 'purple', 'orange']
+    colors = ['red', 'blue', 'green', 'purple', 'orange', 'darkred', 'lightred', 'beige', 'darkblue', 'darkgreen']
 
-    for vehicle in routes:
+    for i, vehicle in enumerate(routes):
         route_indices = vehicle['route']
-        vehicle_id = vehicle['vehicle_id']
-        color = colors[vehicle_id % len(colors)]
+        color = colors[i % len(colors)]
         
         path_coords = []
         for idx in route_indices:
@@ -119,7 +141,6 @@ if st.session_state['routes']:
             lon = full_df.iloc[idx]['longitude']
             path_coords.append([lat, lon])
             
-            # Plot Employee Marker (Skip Depot 0)
             if idx != 0:
                 folium.Marker(
                     [lat, lon],
@@ -127,27 +148,26 @@ if st.session_state['routes']:
                     icon=folium.Icon(color=color, icon="user", prefix="fa")
                 ).add_to(m)
 
-        # Draw Line
         folium.PolyLine(
-            path_coords, 
-            color=color, 
-            weight=5, 
-            opacity=0.8,
-            tooltip=f"Vehicle {vehicle_id}"
+            path_coords, color=color, weight=5, opacity=0.8,
+            tooltip=f"Vehicle {vehicle['vehicle_id']}"
         ).add_to(m)
         
     st_folium(m, width=1000, height=600)
     
-    # Show Manifest
+    # --- MANIFEST ---
     st.subheader("📋 Route Manifest")
-    total_time = sum(r['distance'] for r in routes)
-    st.info(f"Total Fleet Time: {total_time:.0f} minutes")
+    
+    total_minutes = sum(r['distance'] for r in routes)
+    formatted_total = format_duration(total_minutes)
+    
+    st.info(f"**Total Fleet Time:** {formatted_total}")
     
     for v in routes:
-        st.text(f"🚌 Vehicle {v['vehicle_id']}: {v['distance']} mins | Stops: {len(v['route'])-2}")
+        v_time = format_duration(v['distance'])
+        st.text(f"🚌 Vehicle {v['vehicle_id']}: {v_time} | Stops: {len(v['route'])-2}")
 
 else:
-    # No routes yet? Just show grey markers
     for _, row in df_display.iterrows():
         folium.Marker([row['latitude'], row['longitude']], icon=folium.Icon(color="gray")).add_to(m)
     st_folium(m, width=1000, height=600)

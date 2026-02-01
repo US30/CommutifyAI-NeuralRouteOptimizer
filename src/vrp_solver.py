@@ -1,73 +1,27 @@
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
 import numpy as np
-from .config import NUM_VEHICLES, VEHICLE_CAPACITY, DEPOT_INDEX
+from .config import VEHICLE_CAPACITY, DEPOT_INDEX
 
-def create_data_model(distance_matrix, demands):
-    """Stores the data for the problem."""
+def create_data_model(distance_matrix, demands, num_vehicles):
+    """Stores the data for the problem with dynamic vehicle count."""
     data = {}
     data['distance_matrix'] = distance_matrix
     data['demands'] = demands
-    data['num_vehicles'] = NUM_VEHICLES
-    data['vehicle_capacities'] = [VEHICLE_CAPACITY] * NUM_VEHICLES
+    data['num_vehicles'] = num_vehicles
+    data['vehicle_capacities'] = [VEHICLE_CAPACITY] * num_vehicles
     data['depot'] = DEPOT_INDEX
     return data
 
-def print_solution(data, manager, routing, solution):
-    """Prints solution on console and returns structured data."""
-    print(f"Objective: {solution.ObjectiveValue()} (Total Distance)")
-    total_distance = 0
-    total_load = 0
-    all_routes = []
-
-    for vehicle_id in range(data['num_vehicles']):
-        index = routing.Start(vehicle_id)
-        plan_output = f'Route for Vehicle {vehicle_id}:\n'
-        route_distance = 0
-        route_load = 0
-        current_route = []
-        
-        while not routing.IsEnd(index):
-            node_index = manager.IndexToNode(index)
-            route_load += data['demands'][node_index]
-            
-            # Add to route list
-            current_route.append(node_index)
-            
-            plan_output += f' {node_index} Load({route_load}) -> '
-            previous_index = index
-            index = solution.Value(routing.NextVar(index))
-            route_distance += routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-            
-        node_index = manager.IndexToNode(index)
-        plan_output += f' {node_index} Load({route_load})\n'
-        plan_output += f'Distance of the route: {route_distance}km\n'
-        plan_output += f'Load of the route: {route_load}\n'
-        
-        print(plan_output)
-        total_distance += route_distance
-        total_load += route_load
-        
-        all_routes.append({
-            "vehicle_id": vehicle_id,
-            "route": current_route,
-            "distance": route_distance,
-            "load": route_load
-        })
-
-    print(f'Total distance of all routes: {total_distance}km')
-    print(f'Total load of all routes: {total_load}')
-    return all_routes
-
-def solve_vrp(distance_matrix, df_employees):
-    print("\n--- Starting VRP Optimization (OR-Tools) ---")
-    
+def solve_vrp(distance_matrix, df_employees, num_vehicles=4):
+    """
+    Solves the VRP with a dynamic number of vehicles.
+    """
     # 1. Prepare Data
     demands = df_employees['demand'].tolist()
-    data = create_data_model(distance_matrix, demands)
+    data = create_data_model(distance_matrix, demands, num_vehicles)
 
     # 2. Create Routing Index Manager
-    # Arguments: number of locations, number of vehicles, depot node index
     manager = pywrapcp.RoutingIndexManager(
         len(data['distance_matrix']), 
         data['num_vehicles'], 
@@ -78,7 +32,6 @@ def solve_vrp(distance_matrix, df_employees):
     routing = pywrapcp.RoutingModel(manager)
 
     # 4. Create and Register Transit Callback
-    # This tells the solver how "expensive" travel is between two nodes
     def distance_callback(from_index, to_index):
         from_node = manager.IndexToNode(from_index)
         to_node = manager.IndexToNode(to_index)
@@ -86,7 +39,7 @@ def solve_vrp(distance_matrix, df_employees):
 
     transit_callback_index = routing.RegisterTransitCallback(distance_callback)
 
-    # 5. Define Cost of each arc (Cost = Distance)
+    # 5. Define Cost of each arc
     routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
 
     # 6. Add Capacity Constraints
@@ -99,13 +52,12 @@ def solve_vrp(distance_matrix, df_employees):
     routing.AddDimensionWithVehicleCapacity(
         demand_callback_index,
         0,  # null capacity slack
-        data['vehicle_capacities'],  # vehicle maximum capacities
+        data['vehicle_capacities'],
         True,  # start cumul to zero
         'Capacity'
     )
 
     # 7. Setting Search Parameters
-    # We use PATH_CHEAPEST_ARC as a heuristic to find a good first solution quickly
     search_parameters = pywrapcp.DefaultRoutingSearchParameters()
     search_parameters.first_solution_strategy = (
         routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC
@@ -114,9 +66,35 @@ def solve_vrp(distance_matrix, df_employees):
     # 8. Solve
     solution = routing.SolveWithParameters(search_parameters)
 
-    # 9. Output
+    # 9. Extract Solution
     if solution:
-        return print_solution(data, manager, routing, solution)
+        return extract_solution(data, manager, routing, solution)
     else:
-        print("No solution found!")
         return None
+
+def extract_solution(data, manager, routing, solution):
+    """Extracts the routes from the solution object."""
+    all_routes = []
+    for vehicle_id in range(data['num_vehicles']):
+        index = routing.Start(vehicle_id)
+        current_route = []
+        route_distance = 0
+        
+        while not routing.IsEnd(index):
+            node_index = manager.IndexToNode(index)
+            current_route.append(node_index)
+            previous_index = index
+            index = solution.Value(routing.NextVar(index))
+            route_distance += routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
+            
+        # Add the final return to depot
+        node_index = manager.IndexToNode(index)
+        # Only add route if it actually moved (has more than just start/end depot)
+        if len(current_route) > 1 or route_distance > 0:
+            current_route.append(node_index) 
+            all_routes.append({
+                "vehicle_id": vehicle_id,
+                "route": current_route,
+                "distance": route_distance
+            })
+    return all_routes
