@@ -6,7 +6,8 @@
 ![Optimized Route Visualization](assets/dashboard2.png)
 *Detailed route map showing color-coded vehicle paths with employee pickup locations. Each route is optimized to minimize travel time while respecting vehicle capacity constraints. The depot (office) is marked in red, with distinct colors representing different vehicles serving their assigned routes.*
 
-![Route Manifest & Performance Metrics](assets/dashboard3.png)
+<img src="assets/dashboard3.png" alt="Route Manifest & Performance Metrics" width="500">
+
 *Route manifest displaying comprehensive fleet performance metrics including total fleet time (11h 17m), individual vehicle durations, and number of stops per route. This summary enables fleet managers to monitor workload distribution and identify optimization opportunities across vehicles.*
 
 ---
