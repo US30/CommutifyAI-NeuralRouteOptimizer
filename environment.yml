@@ -16,3 +16,4 @@ dependencies:
     - fastapi
     - uvicorn
     - python-multipart
+    - xgboost
