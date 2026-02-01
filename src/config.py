@@ -1,0 +1,12 @@
+import os
+
+# Paths
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_RAW = os.path.join(BASE_DIR, '../data/raw')
+DATA_PROCESSED = os.path.join(BASE_DIR, '../data/processed')
+
+# Simulation Settings
+NUM_EMPLOYEES = 50
+CITY_CENTER_LAT = 12.9716  # Bangalore
+CITY_CENTER_LON = 77.5946
+RADIUS_KM = 15  # Employees live within 15km of office
