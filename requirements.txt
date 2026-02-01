@@ -23,6 +23,8 @@ cffi==1.17.1
 charset-normalizer==3.4.3
 click==8.1.8
 comm==0.2.3
+contourpy==1.3.0
+cycler==0.12.1
 debugpy==1.8.16
 decorator==5.2.1
 defusedxml==0.7.1
@@ -32,6 +34,7 @@ Faker==37.12.0
 fastapi==0.128.0
 fastjsonschema==2.21.2
 folium==0.20.0
+fonttools==4.60.2
 fqdn==1.5.1
 geographiclib==2.1
 geopy==2.4.1
@@ -46,6 +49,7 @@ hyperframe==6.1.0
 idna==3.10
 immutabledict==4.2.2
 importlib_metadata==8.7.0
+importlib_resources==6.5.2
 ipykernel==6.30.1
 ipython==8.18.1
 ipywidgets==8.1.7
@@ -69,8 +73,10 @@ jupyterlab==4.4.6
 jupyterlab_pygments==0.3.0
 jupyterlab_server==2.27.3
 jupyterlab_widgets==3.0.15
+kiwisolver==1.4.7
 lark==1.2.2
 MarkupSafe==3.0.2
+matplotlib==3.9.4
 matplotlib-inline==0.1.7
 mistune==3.1.3
 narwhals==2.15.0
@@ -106,6 +112,7 @@ pydeck==0.9.1
 Pygments==2.19.2
 pyobjc-core==11.1
 pyobjc-framework-Cocoa==11.1
+pyparsing==3.3.2
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
 python-json-logger==2.0.7
@@ -121,6 +128,7 @@ rfc3987-syntax==1.1.0
 rpds-py==0.27.0
 scikit-learn==1.6.1
 scipy==1.13.1
+seaborn==0.13.2
 Send2Trash==1.8.3
 setuptools==80.9.0
 six==1.17.0
