@@ -48,7 +48,7 @@ This system is designed for corporate employee transportation, optimizing bus ro
          ▼
 ┌─────────────────────────────────┐
 │   Distance Matrix Calculation   │
-│      (Haversine Formula)         │
+│      (Haversine Formula)        │
 └────────┬────────────────────────┘
          │
          ▼
