@@ -17,3 +17,6 @@ dependencies:
     - uvicorn
     - python-multipart
     - xgboost
+    - streamlit
+    - folium
+    - streamlit-folium
